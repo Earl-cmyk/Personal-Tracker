@@ -1532,6 +1532,8 @@ def init_db():
 dashboard_manager = None
 
 if __name__ == '__main__':
+    init_db()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
     # Create data directory
     DATA_DIR.mkdir(exist_ok=True)
     
