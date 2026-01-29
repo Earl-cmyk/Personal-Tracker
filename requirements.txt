@@ -9,3 +9,4 @@ python-dotenv==1.0.0
 python-dateutil==2.9.0
 cryptography==42.0.8
 bcrypt
+beautifulsoup4
