@@ -1,0 +1,1522 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <!-- Header -->
+    <header class="dashboard-header">
+        <div class="header-left">
+            <h1><i class="fas fa-tachometer-alt"></i> Your Metrics Dashboard</h1>
+            <p class="subtitle">Track all your platforms in one place</p>
+        </div>
+        <div class="header-actions">
+            <a href="{{ url_for('add_app') }}" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Add App
+            </a>
+            <button class="btn btn-secondary" id="refreshAll" title="Refresh all apps">
+                <i class="fas fa-sync-alt"></i> Refresh All
+            </button>
+        </div>
+    </header>
+    
+    <!-- Ollama Status Indicator -->
+    <div class="ollama-status" id="ollamaStatus">
+        <div class="status-indicator">
+            <i class="fas fa-robot"></i>
+            <span class="status-text">Checking AI status...</span>
+        </div>
+    </div>
+    
+    <!-- Quick Stats -->
+    <section class="quick-stats">
+        <div class="stat-card">
+            <div class="stat-icon total-apps">
+                <i class="fas fa-layer-group"></i>
+            </div>
+            <div class="stat-info">
+                <h3>{{ total_connections }}</h3>
+                <p>Total Apps</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon active-apps">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-info">
+                <h3>{{ active_connections }}</h3>
+                <p>Active</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon today-metrics">
+                <i class="fas fa-chart-line"></i>
+            </div>
+            <div class="stat-info">
+                <h3>{{ total_metrics_count }}</h3>
+                <p>Today's Metrics</p>
+            </div>
+        </div>
+        
+        <div class="stat-card">
+            <div class="stat-icon unread-notifications">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div class="stat-info">
+                <h3>{{ unread_notifications }}</h3>
+                <p>Unread</p>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Notifications Panel moved below Insights -->
+    <section class="notifications-below-insights">
+        <aside class="notifications-panel">
+            <div class="notifications-header">
+                <h3><i class="fas fa-bell"></i> Recent Notifications</h3>
+                <div class="notifications-actions">
+                    <button class="btn-mark-all-read" id="markAllRead" title="Mark all as read">
+                        <i class="fas fa-check-double"></i>
+                    </button>
+                    <button class="btn-refresh-notifications" id="refreshNotifications" title="Refresh notifications">
+                        <i class="fas fa-redo"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="notifications-list" id="notificationsList">
+                {% for notification in notifications %}
+                <div class="notification-item notification-{{ notification.priority }} {% if not notification.read %}unread{% endif %}" 
+                     data-id="{{ notification.id }}">
+                    <div class="notification-icon">
+                        {% if notification.source %}
+                            <i class="{{ get_app_icon(notification.source) }}"></i>
+                        {% else %}
+                            <i class="fas fa-bell"></i>
+                        {% endif %}
+                    </div>
+                    <div class="notification-content">
+                        <div class="notification-header">
+                            <span class="notification-source">
+                                {{ notification.source|title if notification.source else 'System' }}
+                            </span>
+                            <span class="notification-time">
+                                {{ notification.created_at|time_ago }}
+                            </span>
+                        </div>
+                        <div class="notification-body">
+                            <strong>{{ notification.title }}</strong>
+                            <p>{{ notification.content }}</p>
+                        </div>
+                        {% if not notification.read %}
+                        <div class="notification-footer">
+                            <button class="btn-mark-read" data-id="{{ notification.id }}">
+                                <i class="fas fa-check"></i> Mark as read
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="notification-empty">
+                    <div class="empty-icon">
+                        <i class="fas fa-inbox"></i>
+                    </div>
+                    <h4>All caught up!</h4>
+                    <p>No new notifications</p>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="notifications-footer">
+                <a href="#" class="view-all-notifications">
+                    <i class="fas fa-list"></i> View all notifications
+                </a>
+            </div>
+        </aside>
+    </section>
+    
+    <!-- Insights Section -->
+    <section class="insights-section">
+        <div class="section-header">
+            <h2><i class="fas fa-lightbulb"></i> Daily Insights</h2>
+            <button class="btn-refresh-insights" id="refreshInsights" title="Refresh insights">
+                <i class="fas fa-redo"></i>
+            </button>
+        </div>
+        <div class="insights-grid">
+            <div class="insight-card health">
+                <div class="insight-header">
+                    <i class="fas fa-heartbeat"></i>
+                    <h3>Health Tip</h3>
+                </div>
+                <div class="insight-content">
+                    <p>{{ insights.health }}</p>
+                </div>
+                <div class="insight-footer">
+                    <small><i class="fas fa-user-md"></i> Medical Professionals</small>
+                </div>
+            </div>
+            
+            <div class="insight-card law">
+                <div class="insight-header">
+                    <i class="fas fa-gavel"></i>
+                    <h3>Philippine Law</h3>
+                </div>
+                <div class="insight-content">
+                    <p>{{ insights.law }}</p>
+                </div>
+                <div class="insight-footer">
+                    <small><i class="fas fa-balance-scale"></i> Legal Update</small>
+                </div>
+            </div>
+            
+            <div class="insight-card philosophy">
+                <div class="insight-header">
+                    <i class="fas fa-brain"></i>
+                    <h3>Philosophy Quote</h3>
+                </div>
+                <div class="insight-content">
+                    <p>{{ insights.philosophy }}</p>
+                </div>
+                <div class="insight-footer">
+                    <small><i class="fas fa-quote-right"></i> Wisdom</small>
+                </div>
+            </div>
+            
+            <div class="insight-card bible">
+                <div class="insight-header">
+                    <i class="fas fa-book-bible"></i>
+                    <h3>Bible Verse</h3>
+                </div>
+                <div class="insight-content">
+                    <p>{{ insights.bible }}</p>
+                </div>
+                <div class="insight-footer">
+                    <small><i class="fas fa-church"></i> Spiritual Guidance</small>
+                </div>
+            </div>
+        </div>
+    </section>
+    
+    <!-- Main Content -->
+    <div class="dashboard-content">
+        <!-- App Connections -->
+        <section class="apps-section">
+            <div class="section-header">
+                <h2><i class="fas fa-th-large"></i> Your Connected Apps</h2>
+                <div class="stats">
+                    <span class="stat-item">
+                        <i class="fas fa-plug"></i> {{ total_connections }} Connected
+                    </span>
+                    <span class="stat-item">
+                        <i class="fas fa-sync"></i> {{ active_connections }} Synced
+                    </span>
+                </div>
+            </div>
+            
+            <div class="apps-grid">
+                {% for connection in connections %}
+                <div class="app-card" data-app="{{ connection.app_name|lower }}" data-id="{{ connection.id }}">
+                    <div class="app-header">
+                        <div class="app-icon">
+                            <i class="{{ get_app_icon(connection.platform) }}"></i>
+                        </div>
+                        <div class="app-info">
+                            <h3>{{ connection.app_name }}</h3>
+                            <span class="app-platform">
+                                {{ connection.platform|title }}
+                            </span>
+                        </div>
+                        <div class="app-status">
+                            <span class="status-badge status-{{ connection.sync_status }}">
+                                {% if connection.sync_status == 'active' or connection.sync_status == 'synced' %}
+                                    <i class="fas fa-check-circle"></i> Synced
+                                {% elif connection.sync_status == 'pending' %}
+                                    <i class="fas fa-clock"></i> Pending
+                                {% elif connection.sync_status == 'error' %}
+                                    <i class="fas fa-exclamation-circle"></i> Error
+                                {% elif connection.sync_status == 'syncing' %}
+                                    <i class="fas fa-spinner fa-spin"></i> Syncing
+                                {% else %}
+                                    <i class="fas fa-question-circle"></i> {{ connection.sync_status }}
+                                {% endif %}
+                            </span>
+                            <div class="app-actions">
+                                <button class="btn-action btn-sync" data-id="{{ connection.id }}" title="Sync now">
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                                {% if connection.profile_url %}
+                                <a href="{{ connection.profile_url }}" target="_blank" class="btn-action btn-visit" title="Visit profile">
+                                    <i class="fas fa-external-link-alt"></i>
+                                </a>
+                                {% endif %}
+                                <button class="btn-action btn-test" data-id="{{ connection.id }}" title="Test connection">
+                                    <i class="fas fa-wifi"></i>
+                                </button>
+                                <button class="btn-action btn-edit" data-id="{{ connection.id }}" title="Edit connection">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-action btn-delete" data-id="{{ connection.id }}" title="Remove connection">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="app-metrics" id="metrics-{{ connection.id }}">
+                        {% if connection_metrics[connection.id] %}
+                            {% for metric in connection_metrics[connection.id] %}
+                            <div class="metric-item">
+                                <div class="metric-info">
+                                    <span class="metric-label">{{ metric.label }}</span>
+                                    <span class="metric-timestamp">{{ metric.timestamp|time_ago if metric.timestamp else 'Recent' }}</span>
+                                </div>
+                                <div class="metric-value">
+                                    <strong>{{ metric.value }}</strong>
+                                    {% if metric.change is defined and metric.change != None %}
+                                    <span class="metric-change {% if metric.change >= 0 %}positive{% else %}negative{% endif %}">
+                                        {% if metric.change >= 0 %}+{% endif %}{{ metric.change }}%
+                                    </span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="metrics-placeholder">
+                                <i class="fas fa-chart-line"></i>
+                                <p>No metrics yet</p>
+                                <small>Click sync to fetch data</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="app-footer">
+                        <div class="last-sync">
+                            <i class="fas fa-history"></i>
+                            <span>Last sync: {{ connection.last_sync|time_ago if connection.last_sync else 'Never' }}</span>
+                        </div>
+                        {% if connection.profile_url %}
+                        <div class="profile-url">
+                            <small><i class="fas fa-link"></i> {{ connection.profile_url[:30] }}...</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <i class="fas fa-plug"></i>
+                    </div>
+                    <h3>No apps connected yet</h3>
+                    <p>Start by adding your first app to track metrics</p>
+                    <a href="{{ url_for('add_app') }}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle"></i> Add Your First App
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        
+        
+    </div>
+</div>
+
+<!-- Edit Connection Modal -->
+<div id="editModal" class="modal" aria-hidden="true" style="display:none;">
+    <div class="modal-backdrop"></div>
+    <div class="modal-panel">
+        <header class="modal-header">
+            <h3>Edit Connection</h3>
+            <button class="modal-close" id="editModalClose" title="Close">&times;</button>
+        </header>
+        <form id="editForm" class="modal-body">
+            <div class="form-row">
+                <label for="editAppName">App name</label>
+                <input id="editAppName" name="app_name" type="text" required />
+            </div>
+            <div class="form-row">
+                <label for="editProfileUrl">Profile URL</label>
+                <input id="editProfileUrl" name="profile_url" type="url" placeholder="https://..." />
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="editCancel">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="editSave">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Initialize dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    // Setup event listeners
+    document.getElementById('refreshAll').addEventListener('click', refreshAllApps);
+    document.getElementById('refreshInsights').addEventListener('click', refreshInsights);
+    document.getElementById('refreshNotifications').addEventListener('click', refreshNotifications);
+    document.getElementById('markAllRead').addEventListener('click', markAllAsRead);
+    
+    // Check Ollama status
+    checkOllamaStatus();
+    
+    // App card actions
+    document.querySelectorAll('.btn-sync').forEach(btn => {
+        btn.addEventListener('click', syncApp);
+    });
+    
+    document.querySelectorAll('.btn-test').forEach(btn => {
+        btn.addEventListener('click', testConnection);
+    });
+    
+    document.querySelectorAll('.btn-mark-read').forEach(btn => {
+        btn.addEventListener('click', markNotificationAsRead);
+    });
+    
+    // View all notifications
+    document.querySelector('.view-all-notifications').addEventListener('click', function(e) {
+        e.preventDefault();
+        showAllNotifications();
+    });
+});
+
+function syncApp(event) {
+    const appId = event.currentTarget.dataset.id;
+    const card = event.currentTarget.closest('.app-card');
+    
+    // Show loading state
+    card.classList.add('syncing');
+    event.currentTarget.disabled = true;
+    event.currentTarget.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    
+    showLoading();
+    
+    fetch(`/sync/${appId}`)
+        .then(response => response.json())
+        .then(data => {
+            console.log('Sync response:', data);
+            
+            // Update status badge
+            const statusBadge = card.querySelector('.status-badge');
+            statusBadge.className = 'status-badge status-syncing';
+            statusBadge.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing';
+            
+            // Wait 2 seconds then reload
+            setTimeout(() => {
+                hideLoading();
+                location.reload();
+            }, 2000);
+        })
+        .catch(error => {
+            console.error('Sync failed:', error);
+            hideLoading();
+            card.classList.remove('syncing');
+            event.currentTarget.disabled = false;
+            event.currentTarget.innerHTML = '<i class="fas fa-sync-alt"></i>';
+            
+            // Show error
+            showToast('Sync failed. Please try again.', 'error');
+        });
+}
+
+function testConnection(event) {
+    const connectionId = event.currentTarget.dataset.id;
+    const card = event.currentTarget.closest('.app-card');
+    
+    showLoading();
+    
+    fetch(`/api/connection/${connectionId}/test`)
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.status === 'success') {
+                showToast('Connection test successful!', 'success');
+            } else {
+                showToast('Connection test failed: ' + data.message, 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showToast('Test failed: ' + error.message, 'error');
+        });
+}
+
+function refreshAllApps() {
+    document.querySelectorAll('.btn-sync').forEach(btn => {
+        if (!btn.disabled) {
+            btn.click();
+        }
+    });
+}
+
+function refreshInsights() {
+    showLoading();
+    
+    fetch('/insights/daily')
+        .then(response => response.json())
+        .then(insights => {
+            // Update insight cards
+            const categories = ['health', 'law', 'philosophy', 'bible'];
+            categories.forEach(category => {
+                const card = document.querySelector(`.insight-card.${category} .insight-content p`);
+                if (card && insights[category]) {
+                    card.textContent = insights[category];
+                }
+            });
+            
+            hideLoading();
+            
+            // Show success message
+            showToast('Insights refreshed successfully!', 'success');
+        })
+        .catch(error => {
+            console.error('Failed to refresh insights:', error);
+            hideLoading();
+            showToast('Failed to refresh insights', 'error');
+        });
+}
+
+function refreshNotifications() {
+    const container = document.getElementById('notificationsList');
+    container.classList.add('loading');
+    
+    fetch('/notifications')
+        .then(response => response.json())
+        .then(notifications => {
+            // Update notifications list
+            updateNotificationsList(notifications);
+            container.classList.remove('loading');
+            showToast('Notifications refreshed', 'success');
+        })
+        .catch(error => {
+            console.error('Failed to refresh notifications:', error);
+            container.classList.remove('loading');
+            showToast('Failed to refresh notifications', 'error');
+        });
+}
+
+function markAllAsRead() {
+    // This is a simplified version - in real app, implement the API endpoint
+    document.querySelectorAll('.notification-item.unread').forEach(item => {
+        item.classList.remove('unread');
+        const markBtn = item.querySelector('.btn-mark-read');
+        if (markBtn) markBtn.remove();
+    });
+    
+    // Update unread count
+    updateUnreadCount(0);
+    
+    showToast('All notifications marked as read', 'success');
+}
+
+function markNotificationAsRead(event) {
+    const notificationId = event.currentTarget.dataset.id;
+    const item = event.currentTarget.closest('.notification-item');
+    
+    // This is a simplified version - in real app, implement the API endpoint
+    item.classList.remove('unread');
+    event.currentTarget.remove();
+    
+    // Update unread count
+    const unreadCount = document.querySelectorAll('.notification-item.unread').length;
+    updateUnreadCount(unreadCount);
+    
+    showToast('Notification marked as read', 'success');
+}
+
+function updateNotificationsList(notifications) {
+    const container = document.getElementById('notificationsList');
+    
+    if (notifications.length === 0) {
+        container.innerHTML = `
+            <div class="notification-empty">
+                <div class="empty-icon">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <h4>All caught up!</h4>
+                <p>No new notifications</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = notifications.map(notification => `
+        <div class="notification-item notification-${notification.priority} ${notification.read ? '' : 'unread'}" 
+             data-id="${notification.id}">
+            <div class="notification-icon">
+                <i class="fas fa-bell"></i>
+            </div>
+            <div class="notification-content">
+                <div class="notification-header">
+                    <span class="notification-source">
+                        ${notification.source ? notification.source.charAt(0).toUpperCase() + notification.source.slice(1) : 'System'}
+                    </span>
+                    <span class="notification-time">
+                        ${formatTime(notification.created_at)}
+                    </span>
+                </div>
+                <div class="notification-body">
+                    <strong>${notification.title}</strong>
+                    <p>${notification.content}</p>
+                </div>
+                ${!notification.read ? `
+                <div class="notification-footer">
+                    <button class="btn-mark-read" data-id="${notification.id}">
+                        <i class="fas fa-check"></i> Mark as read
+                    </button>
+                </div>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = html;
+    
+    // Re-attach event listeners
+    container.querySelectorAll('.btn-mark-read').forEach(btn => {
+        btn.addEventListener('click', markNotificationAsRead);
+    });
+}
+
+function updateUnreadCount(count) {
+    const statElement = document.querySelector('.stat-card:nth-child(4) .stat-info h3');
+    if (statElement) {
+        statElement.textContent = count;
+    }
+}
+
+function checkOllamaStatus() {
+    fetch('/api/ollama-status')
+        .then(response => response.json())
+        .then(data => {
+            const statusElement = document.getElementById('ollamaStatus');
+            if (data.status === 'connected' || data.status === 'success') {
+                statusElement.innerHTML = `
+                    <div class="status-indicator connected">
+                        <i class="fas fa-robot"></i>
+                        <span class="status-text">AI Insights Active (Ollama Connected)</span>
+                    </div>
+                `;
+            } else {
+                statusElement.innerHTML = `
+                    <div class="status-indicator disconnected">
+                        <i class="fas fa-robot"></i>
+                        <span class="status-text">Using Basic Insights (Install Ollama for AI)</span>
+                        <a href="https://ollama.com/download" target="_blank" class="install-link">
+                            <i class="fas fa-download"></i> Install
+                        </a>
+                    </div>
+                `;
+            }
+        })
+        .catch(error => {
+            console.error('Failed to check Ollama status:', error);
+            document.getElementById('ollamaStatus').innerHTML = `
+                <div class="status-indicator disconnected">
+                    <i class="fas fa-robot"></i>
+                    <span class="status-text">AI Status Unknown</span>
+                </div>
+            `;
+        });
+}
+
+function showAllNotifications() {
+    // Show all notifications modal (to be implemented)
+    alert('All notifications view - Modal to be implemented');
+}
+
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+        <span>${message}</span>
+    `;
+    
+    // Add to page
+    document.body.appendChild(toast);
+    
+    // Show with animation
+    setTimeout(() => toast.classList.add('show'), 10);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function formatTime(isoString) {
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    return date.toLocaleDateString();
+}
+
+// Add toast styles
+const toastStyles = document.createElement('style');
+toastStyles.textContent = `
+    .toast {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        border-radius: var(--radius-sm);
+        background: var(--bg-secondary);
+        color: var(--text-primary);
+        border-left: 4px solid;
+        box-shadow: var(--card-shadow);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 1001;
+        transform: translateX(100%);
+        opacity: 0;
+        transition: all 0.3s ease;
+        max-width: 300px;
+    }
+    
+    .toast.show {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    
+    .toast-success {
+        border-color: var(--accent-success);
+    }
+    
+    .toast-error {
+        border-color: var(--accent-danger);
+    }
+    
+    .toast-info {
+        border-color: var(--accent-info);
+    }
+`;
+document.head.appendChild(toastStyles);
+</script>
+
+<style>
+/* Dashboard Layout */
+.dashboard {
+    padding: 20px;
+}
+
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.header-left h1 {
+    margin: 0 0 5px 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-primary);
+    font-size: 28px;
+}
+
+.header-left .subtitle {
+    color: var(--text-secondary);
+    margin: 0;
+    font-size: 14px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+/* Ollama Status */
+.ollama-status {
+    margin-bottom: 20px;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 15px;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    border: 1px solid;
+}
+
+.status-indicator.connected {
+    background: rgba(16, 185, 129, 0.1);
+    border-color: var(--accent-success);
+    color: var(--accent-success);
+}
+
+.status-indicator.disconnected {
+    background: rgba(245, 158, 11, 0.1);
+    border-color: var(--accent-warning);
+    color: var(--accent-warning);
+}
+
+.status-indicator i {
+    font-size: 16px;
+}
+
+.install-link {
+    margin-left: 10px;
+    color: var(--accent-primary);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.install-link:hover {
+    background: rgba(59, 130, 246, 0.2);
+}
+
+/* Quick Stats */
+.quick-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    border: 1px solid var(--border);
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+.stat-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+}
+
+.total-apps { background: rgba(59, 130, 246, 0.1); color: var(--accent-primary); }
+.active-apps { background: rgba(16, 185, 129, 0.1); color: var(--accent-success); }
+.today-metrics { background: rgba(139, 92, 246, 0.1); color: #8b5cf6; }
+.unread-notifications { background: rgba(245, 158, 11, 0.1); color: var(--accent-warning); }
+
+.stat-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 24px;
+    color: var(--text-primary);
+}
+
+.stat-info p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+/* Insights Section */
+.insights-section {
+    margin-bottom: 30px;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.section-header h2 {
+    margin: 0;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-refresh-insights {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 5px;
+    border-radius: var(--radius-sm);
+    transition: all 0.2s;
+}
+
+.btn-refresh-insights:hover {
+    color: var(--text-primary);
+    background: var(--border);
+}
+
+.insights-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.insight-card {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+}
+
+.insight-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow);
+}
+
+.insight-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.insight-header i {
+    font-size: 20px;
+}
+
+.insight-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: var(--text-primary);
+}
+
+.insight-content p {
+    margin: 0 0 15px 0;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    min-height: 60px;
+}
+
+.insight-footer {
+    font-size: 12px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.insight-card.health .insight-header i { color: var(--accent-success); }
+.insight-card.law .insight-header i { color: var(--accent-warning); }
+.insight-card.philosophy .insight-header i { color: var(--accent-info); }
+.insight-card.bible .insight-header i { color: var(--accent-primary); }
+
+/* Dashboard Content */
+.dashboard-content {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+@media (max-width: 1200px) {
+    .dashboard-content {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Apps Section */
+.apps-section .section-header .stats {
+    display: flex;
+    gap: 20px;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.stat-item i {
+    color: var(--accent-primary);
+}
+
+.apps-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.app-card {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    padding: 20px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.app-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--card-shadow);
+}
+
+.app-card.syncing {
+    opacity: 0.7;
+}
+
+.app-header {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.app-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--accent-primary), #8b5cf6);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    color: white;
+    flex-shrink: 0;
+}
+
+.app-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.app-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 16px;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    color: var(--text-primary);
+}
+
+.app-platform {
+    font-size: 12px;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.app-status {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.status-badge {
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.status-synced, .status-active {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--accent-success);
+}
+
+.status-pending {
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--accent-warning);
+}
+
+.status-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--accent-danger);
+}
+
+.status-syncing {
+    background: rgba(6, 182, 212, 0.1);
+    color: var(--accent-info);
+}
+
+.app-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-action {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.btn-action:hover {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+.btn-action.btn-visit {
+    color: var(--accent-primary);
+}
+
+.btn-action.btn-visit:hover {
+    background: rgba(59, 130, 246, 0.1);
+}
+
+/* App Metrics */
+.app-metrics {
+    margin-bottom: 20px;
+}
+
+.metric-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.metric-item:last-child {
+    border-bottom: none;
+}
+
+.metric-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.metric-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.metric-timestamp {
+    font-size: 11px;
+    color: var(--text-secondary);
+    opacity: 0.7;
+}
+
+.metric-value {
+    text-align: right;
+}
+
+.metric-value strong {
+    font-size: 16px;
+    color: var(--text-primary);
+    display: block;
+}
+
+.metric-change {
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.metric-change.positive {
+    color: var(--accent-success);
+}
+
+.metric-change.negative {
+    color: var(--accent-danger);
+}
+
+.metrics-placeholder {
+    text-align: center;
+    padding: 30px;
+    color: var(--text-secondary);
+}
+
+.metrics-placeholder i {
+    font-size: 24px;
+    margin-bottom: 10px;
+    display: block;
+}
+
+.metrics-placeholder p {
+    margin: 0 0 5px 0;
+}
+
+.metrics-placeholder small {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.app-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.last-sync {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.profile-url {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Empty State */
+.empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 50px 20px;
+    color: var(--text-secondary);
+}
+
+.empty-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    margin: 0 0 10px 0;
+    color: var(--text-primary);
+}
+
+.empty-state p {
+    margin: 0 0 20px 0;
+    max-width: 300px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Notifications Panel */
+.notifications-panel {
+    background: var(--bg-secondary);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    height: fit-content;
+    position: sticky;
+    top: 100px;
+}
+
+.notifications-header {
+    padding: var(--spacing-md);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.notifications-header h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    margin: 0;
+}
+
+.notifications-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-mark-all-read, .btn-refresh-notifications {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+}
+
+.btn-mark-all-read:hover, .btn-refresh-notifications:hover {
+    background-color: var(--border);
+}
+
+.notifications-list {
+    padding: var(--spacing-sm);
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.notification-item {
+    padding: var(--spacing-sm);
+    border-radius: var(--radius-sm);
+    margin-bottom: var(--spacing-xs);
+    border-left: 3px solid var(--border);
+    transition: all 0.2s;
+    display: flex;
+    gap: 10px;
+}
+
+.notification-item.unread {
+    background-color: rgba(59, 130, 246, 0.05);
+    border-left-color: var(--accent-primary);
+}
+
+.notification-item.high {
+    border-left-color: var(--accent-danger);
+}
+
+.notification-item.medium {
+    border-left-color: var(--accent-warning);
+}
+
+.notification-item.low {
+    border-left-color: var(--accent-success);
+}
+
+.notification-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--bg-primary);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.notification-source {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.notification-time {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.notification-body strong {
+    display: block;
+    margin-bottom: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.notification-body p {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin: 0;
+}
+
+.notification-footer {
+    margin-top: 8px;
+}
+
+.btn-mark-read {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.btn-mark-read:hover {
+    background: var(--border);
+    color: var(--text-primary);
+}
+
+.notification-empty {
+    text-align: center;
+    padding: var(--spacing-xl) var(--spacing-md);
+    color: var(--text-secondary);
+}
+
+.notification-empty .empty-icon {
+    font-size: 2rem;
+    margin-bottom: var(--spacing-sm);
+    opacity: 0.5;
+}
+
+.notification-empty h4 {
+    margin: 0 0 5px 0;
+    color: var(--text-primary);
+}
+
+.notification-empty p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.notifications-footer {
+    padding: var(--spacing-sm);
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+
+.view-all-notifications {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+}
+
+.view-all-notifications:hover {
+    text-decoration: underline;
+}
+
+/* Buttons */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.btn-primary {
+    background-color: var(--accent-primary);
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #2563eb;
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background-color: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+.btn-secondary:hover {
+    background-color: var(--border);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .dashboard-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .header-actions {
+        justify-content: flex-start;
+    }
+    
+    /* Edit Modal */
+    .modal {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1200;
+    }
+    .modal-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.4);
+    }
+    .modal-panel {
+        position: relative;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 16px;
+        width: 420px;
+        max-width: calc(100% - 32px);
+        z-index: 1201;
+        box-shadow: var(--card-shadow);
+    }
+    .modal-header { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px }
+    .modal-header h3 { margin:0; font-size:16px }
+    .modal-close { background:none; border:none; font-size:20px; cursor:pointer }
+    .modal-body .form-row { margin-bottom:10px; display:flex; flex-direction:column }
+    .modal-body label { font-size:13px; margin-bottom:6px; color:var(--text-secondary) }
+    .modal-body input { padding:8px 10px; border-radius:6px; border:1px solid var(--border); background:var(--bg-primary); color:var(--text-primary) }
+    .modal-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:8px }
+
+    .quick-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .insights-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .apps-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .dashboard-content {
+        grid-template-columns: 1fr;
+    }
+    
+    .notifications-panel {
+        position: static;
+    }
+}
+</style>
+{% endblock %}
