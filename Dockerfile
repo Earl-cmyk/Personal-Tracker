@@ -21,9 +21,6 @@ COPY . .
 # Create necessary directories
 RUN mkdir -p /app/data /app/static/icons
 
-# Initialize database
-RUN python -c "from app import init_db; init_db()"
-
 # Expose port
 EXPOSE 5000
 
