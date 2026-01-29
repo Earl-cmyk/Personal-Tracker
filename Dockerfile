@@ -25,4 +25,5 @@ RUN mkdir -p /app/data /app/static/icons
 EXPOSE 5000
 
 # Start services
-CMD sh -c "ollama serve & sleep 5 && python app.py"
+CMD sh -c "/usr/local/bin/ollama serve & sleep 5 && python app.py"
+
