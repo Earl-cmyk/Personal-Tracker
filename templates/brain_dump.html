@@ -1,0 +1,440 @@
+{% extends "base.html" %}
+
+{% block title %}Brain Dump - Personal Dashboard{% endblock %}
+
+{% block head_extra %}
+<style>
+    .brain-dump-container {
+        display: grid;
+        grid-template-columns: 1fr 350px;
+        gap: var(--spacing-md);
+        height: calc(100vh - 120px);
+        max-width: 100%;
+        overflow: hidden;
+    }
+    
+    .dump-area {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-md);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-height: 0;
+    }
+    
+    .analysis-sidebar {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-md);
+        overflow-y: auto;
+        overflow-x: hidden;
+        max-height: 100%;
+    }
+    
+    #dumpEditor {
+        flex-grow: 1;
+        background: transparent;
+        border: none;
+        color: var(--text-color);
+        font-size: 1.1rem;
+        line-height: 1.6;
+        resize: none;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        padding: var(--spacing-sm);
+        min-height: 200px;
+        overflow-y: auto;
+    }
+    
+    #dumpEditor:focus {
+        outline: none;
+    }
+    
+    .dump-toolbar {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+    
+    .dump-controls {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    
+    .analysis-category {
+        margin-bottom: 25px;
+        padding-bottom: 15px;
+        border-bottom: 1px solid var(--border-color);
+    }
+    
+    .analysis-result {
+        background: rgba(99, 102, 241, 0.1);
+        border-radius: var(--radius-sm);
+        padding: 15px;
+        margin-top: 10px;
+        font-size: 0.95rem;
+        line-height: 1.5;
+    }
+    
+    .task-suggestion {
+        background: rgba(16, 185, 129, 0.1);
+        border-left: 3px solid var(--accent-success);
+        padding: 12px;
+        margin-bottom: 10px;
+        border-radius: var(--radius-sm);
+    }
+    
+    .ai-thinking {
+        display: none;
+        text-align: center;
+        padding: 20px;
+    }
+    
+    .ai-thinking i {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+        .brain-dump-container {
+            grid-template-columns: 1fr 320px;
+            gap: var(--spacing-sm);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .brain-dump-container {
+            grid-template-columns: 1fr;
+            height: auto;
+            gap: var(--spacing-sm);
+        }
+        
+        .dump-area {
+            order: 1;
+            min-height: 400px;
+        }
+        
+        .analysis-sidebar {
+            order: 2;
+            max-height: 600px;
+        }
+        
+        .dump-toolbar {
+            flex-wrap: wrap;
+            gap: var(--spacing-xs);
+        }
+        
+        .dump-toolbar button {
+            flex: 1;
+            min-width: 120px;
+        }
+        
+        .dump-toolbar select {
+            flex: 1;
+            min-width: 150px;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .dump-header {
+            text-align: center;
+        }
+        
+        .dump-controls {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            align-items: stretch;
+        }
+        
+        .word-count {
+            text-align: center;
+        }
+        
+        .dump-toolbar {
+            flex-direction: column;
+        }
+        
+        .dump-toolbar button,
+        .dump-toolbar select {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dump-header">
+    <h1><i class="fas fa-brain"></i> Brain Dump</h1>
+    <p class="subtitle">Dump everything on your mind. AI will analyze and suggest actions.</p>
+</div>
+
+<div class="brain-dump-container">
+    <div class="dump-area">
+        <div class="dump-controls">
+            <div class="word-count">
+                <i class="fas fa-file-alt"></i>
+                <span id="wordCount">0 words</span>
+            </div>
+            <button class="btn-secondary" onclick="clearDump()">
+                <i class="fas fa-trash"></i> Clear
+            </button>
+        </div>
+        
+        <textarea id="dumpEditor" placeholder="Write anything that's on your mind... 
+• Tasks you need to do
+• Problems you're facing
+• Ideas you have
+• Questions you need answered
+• Random thoughts
+
+The AI will analyze and help organize everything."></textarea>
+        
+        <div class="dump-toolbar">
+            <button class="btn-primary" onclick="analyzeDump()">
+                <i class="fas fa-robot"></i> Analyze with AI
+            </button>
+            <button class="btn-secondary" onclick="saveDump()">
+                <i class="fas fa-save"></i> Save
+            </button>
+            <select id="analysisFocus">
+                <option value="all">Analyze Everything</option>
+                <option value="tasks">Extract Tasks</option>
+                <option value="problems">Identify Problems</option>
+                <option value="decisions">Help with Decisions</option>
+            </select>
+        </div>
+        
+        <div class="ai-thinking" id="aiThinking">
+            <i class="fas fa-spinner fa-spin fa-2x"></i>
+            <p>AI is analyzing your thoughts...</p>
+        </div>
+    </div>
+    
+    <div class="analysis-sidebar">
+        <h3><i class="fas fa-chart-bar"></i> AI Analysis</h3>
+        
+        <div class="analysis-category">
+            <h4><i class="fas fa-tasks"></i> Tasks Identified</h4>
+            <div id="tasksList" class="analysis-result">
+                <p class="muted">AI will identify tasks here...</p>
+            </div>
+        </div>
+        
+        <div class="analysis-category">
+            <h4><i class="fas fa-stethoscope"></i> Health Concerns</h4>
+            <div id="healthAnalysis" class="analysis-result">
+                <p class="muted">Health-related analysis will appear here...</p>
+            </div>
+        </div>
+        
+        <div class="analysis-category">
+            <h4><i class="fas fa-gavel"></i> Legal Issues</h4>
+            <div id="legalAnalysis" class="analysis-result">
+                <p class="muted">Legal analysis will appear here...</p>
+            </div>
+        </div>
+        
+        <div class="analysis-category">
+            <h4><i class="fas fa-lightbulb"></i> Philosophical Insights</h4>
+            <div id="philosophyAnalysis" class="analysis-result">
+                <p class="muted">Philosophical insights will appear here...</p>
+            </div>
+        </div>
+        
+        <div class="analysis-category">
+            <h4><i class="fas fa-flask"></i> Scientific Perspectives</h4>
+            <div id="scienceAnalysis" class="analysis-result">
+                <p class="muted">Scientific analysis will appear here...</p>
+            </div>
+        </div>
+        
+        <div class="analysis-category">
+            <h4><i class="fas fa-bell"></i> Notification Actions</h4>
+            <div id="notificationActions" class="analysis-result">
+                {% for notification in pending_notifications %}
+                <div class="task-suggestion">
+                    <strong>{{ notification.title }}</strong>
+                    <p>{{ notification.content|truncate(60) }}</p>
+                    <div class="action-buttons">
+                        <button class="btn-small" onclick="scheduleNotification({{ notification.id }})">
+                            <i class="fas fa-calendar-plus"></i> Schedule
+                        </button>
+                        <button class="btn-small btn-danger" onclick="dismissNotification({{ notification.id }})">
+                            <i class="fas fa-times"></i> Dismiss
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let autoSaveTimer;
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const editor = document.getElementById('dumpEditor');
+        
+        // Load saved dump
+        fetch('/api/brain-dump/latest')
+            .then(r => r.json())
+            .then(data => {
+                if (data.content) {
+                    editor.value = data.content;
+                    updateWordCount();
+                }
+            });
+        
+        // Auto-save
+        editor.addEventListener('input', function() {
+            updateWordCount();
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(saveDump, 2000);
+        });
+        
+        // Initial word count
+        updateWordCount();
+    });
+    
+    function updateWordCount() {
+        const text = document.getElementById('dumpEditor').value;
+        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+        document.getElementById('wordCount').textContent = `${words} words`;
+    }
+    
+    function saveDump() {
+        const content = document.getElementById('dumpEditor').value;
+        
+        fetch('/api/brain-dump/save', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({content: content})
+        }).then(() => {
+            showToast('Brain dump saved!', 'success');
+        });
+    }
+    
+    function clearDump() {
+        if (confirm('Clear your brain dump? This cannot be undone.')) {
+            document.getElementById('dumpEditor').value = '';
+            updateWordCount();
+            fetch('/api/brain-dump/clear', {method: 'POST'});
+        }
+    }
+    
+    async function analyzeDump() {
+        const content = document.getElementById('dumpEditor').value;
+        const focus = document.getElementById('analysisFocus').value;
+        
+        if (!content.trim()) {
+            alert('Please write something first!');
+            return;
+        }
+        
+        // Show loading
+        document.getElementById('aiThinking').style.display = 'block';
+        
+        try {
+            const response = await fetch('/api/brain-dump/analyze', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    content: content,
+                    focus: focus
+                })
+            });
+            
+            const analysis = await response.json();
+            
+            // Update all analysis sections
+            updateAnalysisSection('tasksList', analysis.tasks);
+            updateAnalysisSection('healthAnalysis', analysis.health);
+            updateAnalysisSection('legalAnalysis', analysis.legal);
+            updateAnalysisSection('philosophyAnalysis', analysis.philosophy);
+            updateAnalysisSection('scienceAnalysis', analysis.science);
+            
+            showToast('Analysis complete!', 'success');
+            
+        } catch (error) {
+            showToast('Analysis failed. Using fallback.', 'error');
+            // Use fallback analysis
+            useFallbackAnalysis(content);
+        } finally {
+            document.getElementById('aiThinking').style.display = 'none';
+        }
+    }
+    
+    function updateAnalysisSection(elementId, content) {
+        const element = document.getElementById(elementId);
+        if (content && content.trim()) {
+            element.innerHTML = `<p>${content.replace(/\n/g, '<br>')}</p>`;
+        }
+    }
+    
+    function useFallbackAnalysis(content) {
+        // Simple fallback analysis
+        const tasks = extractTasksFallback(content);
+        document.getElementById('tasksList').innerHTML = 
+            `<ul>${tasks.map(t => `<li>${t}</li>`).join('')}</ul>`;
+        
+        document.getElementById('healthAnalysis').innerHTML = 
+            `<p>For health concerns, consult with a healthcare professional.</p>`;
+        
+        document.getElementById('legalAnalysis').innerHTML = 
+            `<p>For legal matters, consult with a qualified attorney.</p>`;
+        
+        document.getElementById('philosophyAnalysis').innerHTML = 
+            `<p>"The unexamined life is not worth living." - Socrates</p>`;
+        
+        document.getElementById('scienceAnalysis').innerHTML = 
+            `<p>Always approach problems with evidence-based thinking.</p>`;
+    }
+    
+    function extractTasksFallback(text) {
+        // Simple task extraction
+        const taskIndicators = ['need to', 'should', 'must', 'have to', 'todo', 'task'];
+        const lines = text.split('\n');
+        return lines.filter(line => 
+            taskIndicators.some(indicator => line.toLowerCase().includes(indicator))
+        ).slice(0, 5);
+    }
+    
+    function scheduleNotification(notificationId) {
+        fetch(`/api/notification/${notificationId}/schedule`, {
+            method: 'POST'
+        }).then(() => {
+            showToast('Notification scheduled!', 'success');
+            document.querySelector(`[data-notification="${notificationId}"]`).remove();
+        });
+    }
+    
+    function dismissNotification(notificationId) {
+        fetch(`/api/notification/${notificationId}/dismiss`, {
+            method: 'POST'
+        }).then(() => {
+            showToast('Notification dismissed', 'info');
+            document.querySelector(`[data-notification="${notificationId}"]`).remove();
+        });
+    }
+    
+    function showToast(message, type) {
+        // Simple toast notification
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => toast.remove(), 3000);
+    }
+</script>
+{% endblock %}

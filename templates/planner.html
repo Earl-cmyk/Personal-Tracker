@@ -1,0 +1,314 @@
+{% extends "base.html" %}
+
+{% block title %}Planner - Personal Dashboard{% endblock %}
+
+{% block head_extra %}
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .planner-container {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: var(--spacing-md);
+        height: calc(100vh - 120px);
+        max-width: 100%;
+        overflow: hidden;
+    }
+    
+    .planner-sidebar {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-md);
+        overflow-y: auto;
+        overflow-x: hidden;
+        max-height: 100%;
+    }
+    
+    .calendar-container {
+        background: var(--card-bg);
+        border-radius: var(--radius-lg);
+        padding: var(--spacing-md);
+        overflow: hidden;
+        min-height: 0;
+    }
+    
+    #calendar {
+        height: 100%;
+        min-height: 400px;
+    }
+    
+    .planner-view-selector {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 20px;
+    }
+    
+    .view-btn {
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        background: transparent;
+        color: var(--text-color);
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .view-btn.active {
+        background: var(--accent-primary);
+        border-color: var(--accent-primary);
+    }
+    
+    .notification-item {
+        background: rgba(99, 102, 241, 0.1);
+        border-left: 3px solid var(--accent-primary);
+        padding: 12px;
+        margin-bottom: 10px;
+        border-radius: var(--radius-sm);
+        cursor: move;
+    }
+    
+    .notification-item:hover {
+        background: rgba(99, 102, 241, 0.2);
+    }
+    
+    .task-form {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .fc-event {
+        cursor: move;
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 1024px) {
+        .planner-container {
+            grid-template-columns: 280px 1fr;
+            gap: var(--spacing-sm);
+        }
+    }
+    
+    @media (max-width: 768px) {
+        .planner-container {
+            grid-template-columns: 1fr;
+            height: auto;
+            gap: var(--spacing-sm);
+        }
+        
+        .planner-sidebar {
+            max-height: 400px;
+            order: 2;
+        }
+        
+        .calendar-container {
+            order: 1;
+            min-height: 500px;
+        }
+        
+        .planner-view-selector {
+            flex-wrap: wrap;
+            gap: var(--spacing-xs);
+        }
+        
+        .view-btn {
+            flex: 1;
+            min-width: 80px;
+            padding: 6px 12px;
+            font-size: 0.875rem;
+        }
+    }
+    
+    @media (max-width: 480px) {
+        .planner-header {
+            flex-direction: column;
+            gap: var(--spacing-sm);
+            align-items: stretch;
+        }
+        
+        .planner-view-selector {
+            justify-content: center;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="planner-header">
+    <h1><i class="fas fa-calendar-alt"></i> Planner</h1>
+    <div class="planner-view-selector">
+        <button class="view-btn active" data-view="timeGridDay">Daily</button>
+        <button class="view-btn" data-view="timeGridWeek">Weekly</button>
+        <button class="view-btn" data-view="dayGridMonth">Monthly</button>
+        <button class="view-btn" data-view="listWeek">List</button>
+    </div>
+</div>
+
+<div class="planner-container">
+    <div class="planner-sidebar">
+        <h3><i class="fas fa-bell"></i> Notifications to Schedule</h3>
+        <div id="notifications-list" class="draggable-list">
+            {% for notification in notifications %}
+            <div class="notification-item draggable" 
+                 data-id="{{ notification.id }}"
+                 data-title="{{ notification.title }}"
+                 data-content="{{ notification.content }}">
+                <strong>{{ notification.title }}</strong>
+                <p class="small">{{ notification.content|truncate(80) }}</p>
+                <span class="badge">{{ notification.source }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <div class="task-form">
+            <h3><i class="fas fa-plus"></i> Add Custom Task</h3>
+            <form id="taskForm">
+                <input type="text" id="taskTitle" placeholder="Task title" required>
+                <textarea id="taskDescription" placeholder="Description" rows="2"></textarea>
+                <div class="form-row">
+                    <input type="datetime-local" id="taskDate" required>
+                    <select id="taskPriority">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary">
+                    <i class="fas fa-plus"></i> Add to Calendar
+                </button>
+            </form>
+        </div>
+        
+        <div class="calendar-stats">
+            <h3><i class="fas fa-chart-pie"></i> This Week</h3>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ events_today }}</div>
+                    <div class="stat-label">Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ events_week }}</div>
+                    <div class="stat-label">This Week</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ high_priority }}</div>
+                    <div class="stat-label">High Priority</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="calendar-container">
+        <div id="calendar"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize calendar
+        const calendarEl = document.getElementById('calendar');
+        const calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'timeGridDay,timeGridWeek,dayGridMonth,listWeek'
+            },
+            editable: true,
+            droppable: true,
+            events: {{ calendar_events|tojson }},
+            drop: function(info) {
+                // Handle dropping notifications onto calendar
+                const eventData = {
+                    title: info.draggedEl.dataset.title,
+                    start: info.dateStr,
+                    allDay: info.allDay,
+                    extendedProps: {
+                        source: 'notification',
+                        content: info.draggedEl.dataset.content
+                    }
+                };
+                calendar.addEvent(eventData);
+                
+                // Mark notification as scheduled
+                fetch(`/api/notification/${info.draggedEl.dataset.id}/schedule`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+            },
+            eventClick: function(info) {
+                showEventDetails(info.event);
+            }
+        });
+        
+        calendar.render();
+        
+        // View selector
+        document.querySelectorAll('.view-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                calendar.changeView(this.dataset.view);
+            });
+        });
+        
+        // Task form
+        document.getElementById('taskForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const event = {
+                title: document.getElementById('taskTitle').value,
+                start: document.getElementById('taskDate').value,
+                extendedProps: {
+                    description: document.getElementById('taskDescription').value,
+                    priority: document.getElementById('taskPriority').value,
+                    type: 'task'
+                }
+            };
+            
+            // Add to calendar
+            calendar.addEvent(event);
+            
+            // Save to backend
+            fetch('/api/calendar/event', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(event)
+            });
+            
+            this.reset();
+        });
+        
+        // Initialize datetime picker
+        flatpickr("#taskDate", {
+            enableTime: true,
+            dateFormat: "Y-m-d H:i",
+            minDate: "today"
+        });
+        
+        function showEventDetails(event) {
+            // Show modal with event details
+            const modal = `
+                <div class="modal">
+                    <h3>${event.title}</h3>
+                    <p>${event.extendedProps.description || 'No description'}</p>
+                    <p><strong>Start:</strong> ${event.start.toLocaleString()}</p>
+                    ${event.extendedProps.priority ? `<p><strong>Priority:</strong> ${event.extendedProps.priority}</p>` : ''}
+                    <button onclick="this.closest('.modal').remove()">Close</button>
+                    <button onclick="deleteEvent('${event.id}')">Delete</button>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', modal);
+        }
+        
+        window.deleteEvent = function(eventId) {
+            calendar.getEventById(eventId).remove();
+            fetch(`/api/calendar/event/${eventId}`, {method: 'DELETE'});
+        };
+    });
+</script>
+{% endblock %}

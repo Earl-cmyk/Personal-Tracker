@@ -86,30 +86,164 @@
             font-size: 3rem;
             color: var(--accent-primary);
         }
+        /* Navigation Tabs */
+        .nav-tabs {
+            display: flex;
+            gap: 1px;
+            background: var(--card-bg);
+            border-radius: var(--radius-sm);
+            padding: 4px;
+            margin: 0 20px;
+            flex-grow: 1;
+            max-width: 600px;
+        }
+
+        .nav-tab {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            text-decoration: none;
+            color: var(--text-color);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+            opacity: 0.7;
+        }
+
+        .nav-tab:hover {
+            background: rgba(99, 102, 241, 0.1);
+            opacity: 0.9;
+        }
+
+        .nav-tab.active {
+            background: var(--accent-primary);
+            color: white;
+            opacity: 1;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        .nav-tab i {
+            font-size: 0.9rem;
+        }
+
+        /* For mobile responsiveness */
+        @media (max-width: 768px) {
+            .nav-container {
+                flex-wrap: wrap;
+                padding: 0 var(--spacing-sm);
+            }
+            
+            .nav-brand {
+                order: 1;
+                flex-basis: 100%;
+                justify-content: center;
+                margin-bottom: var(--spacing-sm);
+            }
+            
+            .nav-tabs {
+                order: 3;
+                margin: var(--spacing-sm) 0;
+                width: 100%;
+                max-width: none;
+                overflow-x: auto;
+                padding: 4px;
+            }
+
+            .nav-tab span {
+                display: none;
+            }
+
+            .nav-tab {
+                flex-grow: 1;
+                justify-content: center;
+                padding: 12px;
+                min-width: 80px;
+            }
+            
+            .nav-tab i {
+                font-size: 1.2rem;
+            }
+            
+            .nav-controls {
+                order: 2;
+                flex-basis: 100%;
+                justify-content: center;
+                margin-bottom: var(--spacing-sm);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .nav-container {
+                padding: 0 var(--spacing-xs);
+            }
+            
+            .nav-tab {
+                padding: 8px;
+                min-width: 60px;
+            }
+        }
+        
+        /* Loading overlay control */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(15, 23, 42, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            display: none;
+        }
+        
+        .loading-spinner {
+            font-size: 3rem;
+            color: var(--accent-primary);
+        }
     </style>
 </head>
 <body>
-    {% if current_user.is_authenticated %}
-    <nav class="navbar">
-        <div class="nav-container">
-            <div class="nav-brand">
-                <i class="fas fa-chart-line"></i>
-                <span>Personal Dashboard</span>
-            </div>
-            <div class="nav-controls">
-                <button class="theme-toggle" id="themeToggle" title="Toggle theme">
-                    <i class="fas fa-moon"></i>
-                </button>
-                <div class="user-menu">
-                    <span><i class="fas fa-user-circle"></i> {{ current_user.email }}</span>
-                    <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </a>
-                </div>
+{% if current_user.is_authenticated %}
+<nav class="navbar">
+    <div class="nav-container">
+        <div class="nav-brand">
+            <i class="fas fa-chart-line"></i>
+            <span>Personal Dashboard</span>
+        </div>
+        <div class="nav-tabs">
+            <a href="{{ url_for('dashboard') }}" class="nav-tab {% if request.endpoint == 'dashboard' %}active{% endif %}">
+                <i class="fas fa-chart-bar"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="{{ url_for('planner') }}" class="nav-tab {% if request.endpoint == 'planner' %}active{% endif %}">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Planner</span>
+            </a>
+            <a href="{{ url_for('brain_dump') }}" class="nav-tab {% if request.endpoint == 'brain_dump' %}active{% endif %}">
+                <i class="fas fa-brain"></i>
+                <span>Brain Dump</span>
+            </a>
+            <a href="{{ url_for('knowledge_library') }}" class="nav-tab {% if request.endpoint == 'knowledge_library' %}active{% endif %}">
+                <i class="fas fa-book"></i>
+                <span>Knowledge Library</span>
+            </a>
+        </div>
+        <div class="nav-controls">
+            <button class="theme-toggle" id="themeToggle" title="Toggle theme">
+                <i class="fas fa-moon"></i>
+            </button>
+            <div class="user-menu">
+                <span><i class="fas fa-user-circle"></i> {{ current_user.email }}</span>
+                <a href="{{ url_for('logout') }}" class="btn-logout" title="Logout">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
             </div>
         </div>
-    </nav>
-    {% endif %}
+    </div>
+</nav>
+{% endif %}
     
     <!-- Flash Messages -->
     <div class="flash-messages">

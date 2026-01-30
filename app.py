@@ -127,8 +127,43 @@ class Activity(db.Model):
 
     user = db.relationship('User', backref='activities')
 
+class BrainDump(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    content = db.Column(db.Text)
+    analysis = db.Column(db.Text)  # JSON analysis from AI
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-# ============================================================================
+    user = db.relationship('User', backref='brain_dumps')
+
+
+class CalendarEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    title = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    start_time = db.Column(db.DateTime, nullable=False)
+    end_time = db.Column(db.DateTime)
+    all_day = db.Column(db.Boolean, default=False)
+    event_type = db.Column(db.String(50), default='task')  # task, notification, appointment
+    priority = db.Column(db.String(20), default='medium')
+    source_id = db.Column(db.Integer)  # ID of source (notification_id, etc.)
+    source_type = db.Column(db.String(50))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    user = db.relationship('User', backref='calendar_events')
+
+
+class KnowledgeItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    category = db.Column(db.String(100), nullable=False)  # health, law, philosophy, science
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    tags = db.Column(db.Text)  # JSON array of tags
+    source = db.Column(db.String(200))
+    is_fallback = db.Column(db.Boolean, default=True)  # True if from fallback library
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)# ============================================================================
 # CORE DATA STRUCTURES
 # ============================================================================
 
@@ -961,7 +996,7 @@ def load_user(user_id):
 @app.route('/')
 @login_required
 def dashboard():
-    """Main dashboard view"""
+    """Main dashboard view - renamed from index"""
     connections = AppConnection.query.filter_by(user_id=current_user.id).all()
     
     # Get recent notifications
@@ -1474,22 +1509,436 @@ def test_ollama():
 
 
 # ============================================================================
+# NEW ROUTES FOR TABS
+# ============================================================================
+
+@app.route('/planner')
+@login_required
+def planner():
+    """Weekly/Daily/Monthly planner with notifications"""
+    # Get notifications for dragging
+    notifications = Notification.query.filter_by(
+        user_id=current_user.id,
+        read=False
+    ).order_by(Notification.created_at.desc()).limit(20).all()
+
+    # Get calendar events
+    events = CalendarEvent.query.filter_by(
+        user_id=current_user.id
+    ).filter(
+        CalendarEvent.start_time >= datetime.utcnow() - timedelta(days=30)
+    ).order_by(CalendarEvent.start_time).all()
+
+    # Format for FullCalendar
+    calendar_events = []
+    for event in events:
+        calendar_events.append({
+            'id': event.id,
+            'title': event.title,
+            'start': event.start_time.isoformat(),
+            'end': event.end_time.isoformat() if event.end_time else None,
+            'allDay': event.all_day,
+            'extendedProps': {
+                'description': event.description,
+                'priority': event.priority,
+                'type': event.event_type
+            }
+        })
+
+    # Stats
+    today = datetime.utcnow().date()
+    week_start = today - timedelta(days=today.weekday())
+    week_end = week_start + timedelta(days=6)
+
+    events_today = CalendarEvent.query.filter_by(
+        user_id=current_user.id
+    ).filter(
+        db.func.date(CalendarEvent.start_time) == today
+    ).count()
+
+    events_week = CalendarEvent.query.filter_by(
+        user_id=current_user.id
+    ).filter(
+        CalendarEvent.start_time >= week_start,
+        CalendarEvent.start_time <= week_end
+    ).count()
+
+    high_priority = CalendarEvent.query.filter_by(
+        user_id=current_user.id,
+        priority='high'
+    ).filter(
+        CalendarEvent.start_time >= today
+    ).count()
+
+    return render_template('planner.html',
+                           notifications=notifications,
+                           calendar_events=calendar_events,
+                           events_today=events_today,
+                           events_week=events_week,
+                           high_priority=high_priority)
+
+
+@app.route('/brain-dump')
+@login_required
+def brain_dump():
+    """Brain dump analysis page"""
+    # Get pending notifications for action suggestions
+    pending_notifications = Notification.query.filter_by(
+        user_id=current_user.id,
+        read=False
+    ).order_by(Notification.created_at.desc()).limit(10).all()
+
+    return render_template('brain_dump.html',
+                           pending_notifications=pending_notifications)
+
+
+@app.route('/knowledge-library')
+@login_required
+def knowledge_library():
+    """Knowledge library page"""
+    # Get knowledge items
+    knowledge_items = KnowledgeItem.query.order_by(
+        KnowledgeItem.category,
+        KnowledgeItem.created_at.desc()
+    ).all()
+
+    # Format for template
+    formatted_items = []
+    for item in knowledge_items:
+        formatted_items.append({
+            'title': item.title,
+            'content': item.content,
+            'categories': [item.category],
+            'tags': json.loads(item.tags) if item.tags else [],
+            'date': item.created_at.strftime('%Y-%m-%d'),
+            'source': item.source
+        })
+
+    # Check Ollama status
+    summarizer = NotificationSummarizer()
+
+    return render_template('knowledge_library.html',
+                           knowledge_items=formatted_items,
+                           ollama_available=summarizer.ollama_available)
+
+
+# ============================================================================
+# API ROUTES FOR NEW FEATURES
+# ============================================================================
+
+@app.route('/api/brain-dump/save', methods=['POST'])
+@login_required
+def save_brain_dump():
+    """Save brain dump content"""
+    data = request.json
+    content = data.get('content', '')
+
+    # Get or create brain dump
+    brain_dump = BrainDump.query.filter_by(
+        user_id=current_user.id
+    ).order_by(BrainDump.created_at.desc()).first()
+
+    if brain_dump:
+        brain_dump.content = content
+        brain_dump.updated_at = datetime.utcnow()
+    else:
+        brain_dump = BrainDump(
+            user_id=current_user.id,
+            content=content
+        )
+        db.session.add(brain_dump)
+
+    db.session.commit()
+    return jsonify({'status': 'success'})
+
+
+@app.route('/api/brain-dump/latest')
+@login_required
+def get_latest_brain_dump():
+    """Get latest brain dump"""
+    brain_dump = BrainDump.query.filter_by(
+        user_id=current_user.id
+    ).order_by(BrainDump.created_at.desc()).first()
+
+    if brain_dump:
+        return jsonify({
+            'content': brain_dump.content,
+            'created_at': brain_dump.created_at.isoformat()
+        })
+    return jsonify({'content': ''})
+
+
+@app.route('/api/brain-dump/analyze', methods=['POST'])
+@login_required
+def analyze_brain_dump():
+    """Analyze brain dump content with AI"""
+    data = request.json
+    content = data.get('content', '')
+    focus = data.get('focus', 'all')
+
+    summarizer = NotificationSummarizer()
+
+    # Use AI analysis if available, otherwise use fallback
+    if summarizer.ollama_available:
+        try:
+            analysis = perform_ai_analysis(content, focus, summarizer)
+        except:
+            analysis = fallback_brain_analysis(content)
+    else:
+        analysis = fallback_brain_analysis(content)
+
+    # Save analysis
+    brain_dump = BrainDump.query.filter_by(
+        user_id=current_user.id
+    ).order_by(BrainDump.created_at.desc()).first()
+
+    if brain_dump:
+        brain_dump.analysis = json.dumps(analysis)
+        db.session.commit()
+
+    return jsonify(analysis)
+
+
+def perform_ai_analysis(content, focus, summarizer):
+    """Perform AI analysis using Ollama"""
+    prompts = {
+        'tasks': f"""Extract tasks and action items from this text. Format as a bullet list.
+
+        Text: {content[:1000]}
+
+        Tasks:""",
+
+        'health': f"""Analyze health-related concerns or questions in this text. Provide helpful advice.
+
+        Text: {content[:1000]}
+
+        Health Analysis:""",
+
+        'legal': f"""Identify any legal issues or questions in this text. Provide basic guidance based on Philippine law.
+
+        Text: {content[:1000]}
+
+        Legal Analysis:""",
+
+        'philosophy': f"""Provide philosophical insights or perspectives on this text.
+
+        Text: {content[:1000]}
+
+        Philosophical Insights:""",
+
+        'science': f"""Analyze any scientific aspects or questions in this text.
+
+        Text: {content[:1000]}
+
+        Scientific Analysis:"""
+    }
+
+    analysis = {}
+
+    if focus == 'all' or focus == 'tasks':
+        try:
+            response = summarizer.ollama_client.generate(
+                model=summarizer.model,
+                prompt=prompts['tasks'],
+                options={'temperature': 0.3, 'max_tokens': 200}
+            )
+            analysis['tasks'] = response['response'].strip()
+        except:
+            analysis['tasks'] = extract_tasks_fallback(content)
+
+    if focus == 'all' or focus in ['health', 'legal', 'philosophy', 'science']:
+        categories = ['health', 'legal', 'philosophy', 'science'] if focus == 'all' else [focus]
+
+        for category in categories:
+            try:
+                insight = summarizer.generate_daily_insight(category, content[:500])
+                analysis[category] = insight
+            except:
+                analysis[category] = fallback_analysis_by_category(category)
+
+    return analysis
+
+
+def fallback_brain_analysis(content):
+    """Fallback analysis when AI is not available"""
+    return {
+        'tasks': extract_tasks_fallback(content),
+        'health': "For health concerns, consult with a healthcare professional.",
+        'legal': "For legal matters, consult with a qualified attorney in your jurisdiction.",
+        'philosophy': "Take time to reflect on your thoughts. Journaling can provide clarity.",
+        'science': "Approach problems systematically and look for evidence-based solutions."
+    }
+
+
+def extract_tasks_fallback(text):
+    """Simple task extraction fallback"""
+    lines = text.split('\n')
+    tasks = []
+
+    for line in lines:
+        line = line.strip().lower()
+        if any(word in line for word in ['need to', 'should', 'must', 'have to', 'todo', 'task:', '- [ ]']):
+            tasks.append(line.capitalize())
+
+    return "\n".join([f"• {task}" for task in tasks[:10]]) if tasks else "No specific tasks identified."
+
+
+def fallback_analysis_by_category(category):
+    """Fallback analysis by category"""
+    fallbacks = {
+        'health': "Remember to stay hydrated, get enough sleep, and maintain a balanced diet.",
+        'legal': "Always document important agreements and understand your rights and responsibilities.",
+        'philosophy': "\"The only true wisdom is in knowing you know nothing.\" - Socrates",
+        'science': "The scientific method: Observe, question, hypothesize, experiment, analyze, conclude."
+    }
+    return fallbacks.get(category, "Analysis not available.")
+
+
+@app.route('/api/calendar/event', methods=['POST'])
+@login_required
+def create_calendar_event():
+    """Create a calendar event"""
+    data = request.json
+
+    event = CalendarEvent(
+        user_id=current_user.id,
+        title=data.get('title'),
+        description=data.get('extendedProps', {}).get('description'),
+        start_time=datetime.fromisoformat(data.get('start').replace('Z', '+00:00')),
+        end_time=datetime.fromisoformat(data.get('end').replace('Z', '+00:00')) if data.get('end') else None,
+        all_day=data.get('allDay', False),
+        priority=data.get('extendedProps', {}).get('priority', 'medium'),
+        event_type=data.get('extendedProps', {}).get('type', 'task')
+    )
+
+    db.session.add(event)
+    db.session.commit()
+
+    return jsonify({'id': event.id, 'status': 'success'})
+
+
+@app.route('/api/notification/<int:notification_id>/schedule', methods=['POST'])
+@login_required
+def schedule_notification(notification_id):
+    """Schedule a notification as a calendar event"""
+    notification = Notification.query.get_or_404(notification_id)
+
+    if notification.user_id != current_user.id:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    # Create calendar event
+    event = CalendarEvent(
+        user_id=current_user.id,
+        title=notification.title,
+        description=notification.content,
+        start_time=datetime.utcnow() + timedelta(hours=1),  # Default: 1 hour from now
+        all_day=False,
+        event_type='notification',
+        source_id=notification.id,
+        source_type='notification',
+        priority='medium'
+    )
+
+    db.session.add(event)
+    notification.read = True
+    db.session.commit()
+
+    return jsonify({'status': 'success', 'event_id': event.id})
+
+
+@app.route('/api/library/insight/<category>')
+@login_required
+def get_library_insight(category):
+    """Get an insight from the knowledge library"""
+    valid_categories = ['health', 'law', 'philosophy', 'science']
+
+    if category not in valid_categories:
+        return jsonify({'error': 'Invalid category'}), 400
+
+    # Try to get from knowledge library
+    item = KnowledgeItem.query.filter_by(
+        category=category
+    ).order_by(db.func.random()).first()
+
+    if item:
+        insight = f"{item.title}\n\n{item.content[:200]}..."
+    else:
+        # Fallback
+        summarizer = NotificationSummarizer()
+        insight = summarizer.generate_daily_insight(category)
+
+    return jsonify({'insight': insight})
+
+
+# Add this to your initialization function to populate the knowledge library
+def init_knowledge_library():
+    """Initialize knowledge library with fallback content"""
+    with app.app_context():
+        if KnowledgeItem.query.count() == 0:
+            knowledge_items = [
+                # Health items
+                KnowledgeItem(
+                    category='health',
+                    title='The Importance of Sleep',
+                    content='Adults need 7-9 hours of sleep per night for optimal health. Sleep helps with memory consolidation, immune function, and cellular repair.',
+                    tags='["sleep", "health", "wellness"]',
+                    is_fallback=True
+                ),
+
+                # Law items
+                KnowledgeItem(
+                    category='law',
+                    title='Basic Rights in the Philippines',
+                    content='The 1987 Philippine Constitution guarantees rights including: freedom of speech, freedom of religion, right to due process, and protection against unreasonable searches.',
+                    tags='["law", "rights", "philippines"]',
+                    is_fallback=True
+                ),
+
+                # Philosophy items
+                KnowledgeItem(
+                    category='philosophy',
+                    title='Stoic Principles',
+                    content='Stoicism teaches: focus on what you can control, accept what you cannot, and cultivate virtue. As Marcus Aurelius said, "You have power over your mind - not outside events."',
+                    tags='["philosophy", "stoicism", "wisdom"]',
+                    is_fallback=True
+                ),
+
+                # Science items
+                KnowledgeItem(
+                    category='science',
+                    title='Critical Thinking',
+                    content='The scientific method involves: observation, questioning, hypothesis formation, experimentation, analysis, and conclusion. Always question sources and look for evidence.',
+                    tags='["science", "thinking", "method"]',
+                    is_fallback=True
+                ),
+            ]
+
+            for item in knowledge_items:
+                db.session.add(item)
+
+            db.session.commit()
+            logger.info("Initialized knowledge library with fallback content")
+
+
+# ============================================================================
 # INITIALIZATION
 # ============================================================================
 
 def init_db():
-    """Initialize database"""
+    """Initialize database with all tables"""
     with app.app_context():
+        # Create all tables
         db.create_all()
-        
+
         # Create demo user if none exists
         if not User.query.first():
             demo_user = User(email='demo@local.dev', google_id='demo_local')
+            demo_user.set_password('demo123')  # Add a password
             db.session.add(demo_user)
             db.session.commit()
-            
+
             logger.info("Created demo user")
-            
+
             # Add some demo connections
             demo_connections = [
                 {
@@ -1528,29 +1977,248 @@ def init_db():
             logger.info("Created demo connections")
 
 
+
+def init_knowledge_library():
+    """Initialize knowledge library with fallback content"""
+    try:
+        # First, check if the table exists by trying to query it
+        try:
+            # This will fail if table doesn't exist
+            count = KnowledgeItem.query.count()
+        except Exception as e:
+            logger.warning(f"KnowledgeItem table doesn't exist yet: {e}")
+            return
+
+        # Only initialize if table is empty
+        if count == 0:
+            knowledge_items = [
+                # Health items
+                KnowledgeItem(
+                    category='health',
+                    title='The Importance of Sleep',
+                    content='Adults need 7-9 hours of sleep per night for optimal health. Sleep helps with memory consolidation, immune function, and cellular repair.',
+                    tags=json.dumps(["sleep", "health", "wellness"]),
+                    is_fallback=True
+                ),
+
+                # Law items
+                KnowledgeItem(
+                    category='law',
+                    title='Basic Rights in the Philippines',
+                    content='The 1987 Philippine Constitution guarantees rights including: freedom of speech, freedom of religion, right to due process, and protection against unreasonable searches.',
+                    tags=json.dumps(["law", "rights", "philippines"]),
+                    is_fallback=True
+                ),
+
+                # Philosophy items
+                KnowledgeItem(
+                    category='philosophy',
+                    title='Stoic Principles',
+                    content='Stoicism teaches: focus on what you can control, accept what you cannot, and cultivate virtue. As Marcus Aurelius said, "You have power over your mind - not outside events."',
+                    tags=json.dumps(["philosophy", "stoicism", "wisdom"]),
+                    is_fallback=True
+                ),
+
+                # Science items
+                KnowledgeItem(
+                    category='science',
+                    title='Critical Thinking',
+                    content='The scientific method involves: observation, questioning, hypothesis formation, experimentation, analysis, and conclusion. Always question sources and look for evidence.',
+                    tags=json.dumps(["science", "thinking", "method"]),
+                    is_fallback=True
+                ),
+            ]
+
+            for item in knowledge_items:
+                db.session.add(item)
+
+            db.session.commit()
+            logger.info("Initialized knowledge library with fallback content")
+
+    except Exception as e:
+        logger.error(f"Failed to initialize knowledge library: {e}")
+        # Don't crash if this fails
+
+
 # Initialize dashboard manager
 dashboard_manager = None
 
-if __name__ == '__main__':
-    init_db()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+# ============================================================================
+# INITIALIZATION
+# ============================================================================
+
+def create_all_tables():
+    """Create all database tables"""
+    with app.app_context():
+        db.create_all()
+        logger.info("All database tables created")
+
+
+def initialize_application():
+    """Initialize the entire application"""
     # Create data directory
     DATA_DIR.mkdir(exist_ok=True)
-    
-    # Initialize database
-    try:
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-        # Try with simpler approach
-        with app.app_context():
-            db.create_all()
-    
+
+    # Create all tables first
+    create_all_tables()
+
+    # Initialize data
+    with app.app_context():
+        # Check if we need to initialize data
+        if not User.query.first():
+            # Create demo user
+            demo_user = User(email='demo@local.dev', google_id='demo_local')
+            demo_user.set_password('demo123')
+            db.session.add(demo_user)
+            db.session.commit()
+
+            logger.info("Created demo user")
+
+            # Create demo connections
+            demo_connections = [
+                {
+                    'app_name': 'GitHub',
+                    'platform': 'github',
+                    'profile_url': 'https://github.com/octocat',
+                    'sync_status': 'active'
+                },
+                {
+                    'app_name': 'YouTube',
+                    'platform': 'youtube',
+                    'profile_url': 'https://www.youtube.com/@YouTube',
+                    'sync_status': 'active'
+                },
+            ]
+
+            for d in demo_connections:
+                conn = AppConnection(
+                    user_id=demo_user.id,
+                    app_name=d['app_name'],
+                    platform=d['platform'],
+                    profile_url=d.get('profile_url'),
+                    credentials='{}',
+                    sync_status='active',
+                    last_sync=datetime.utcnow()
+                )
+                db.session.add(conn)
+
+            db.session.commit()
+
+            # Add knowledge library items
+            try:
+                # Add some knowledge items
+                knowledge_items = [
+                    KnowledgeItem(
+                        category='health',
+                        title='Sleep Importance',
+                        content='Get 7-9 hours of sleep nightly for optimal health.',
+                        tags=json.dumps(["sleep", "health"]),
+                        is_fallback=True
+                    ),
+                    KnowledgeItem(
+                        category='law',
+                        title='Philippine Rights',
+                        content='The Constitution guarantees freedom of speech and religion.',
+                        tags=json.dumps(["law", "rights"]),
+                        is_fallback=True
+                    ),
+                ]
+
+                for item in knowledge_items:
+                    db.session.add(item)
+
+                db.session.commit()
+                logger.info("Added knowledge library items")
+            except Exception as e:
+                logger.warning(f"Could not add knowledge items: {e}")
+
+    logger.info("Application initialization complete")
+
+
+if __name__ == '__main__':
+    # Create data directory
+    DATA_DIR.mkdir(exist_ok=True)
+
+    # Initialize inside app context
+    with app.app_context():
+        # Create all tables FIRST
+        db.create_all()
+        logger.info("Database tables created")
+
+        # Create demo user if none exists
+        if not User.query.first():
+            demo_user = User(email='demo@local.dev', google_id='demo_local')
+            demo_user.set_password('demo123')
+            db.session.add(demo_user)
+            db.session.commit()
+            logger.info("Created demo user")
+
+            # Add demo connections
+            demo_connections = [
+                AppConnection(
+                    user_id=demo_user.id,
+                    app_name='GitHub',
+                    platform='github',
+                    profile_url='https://github.com/octocat',
+                    sync_status='active',
+                    last_sync=datetime.utcnow()
+                ),
+                AppConnection(
+                    user_id=demo_user.id,
+                    app_name='YouTube',
+                    platform='youtube',
+                    profile_url='https://www.youtube.com/@YouTube',
+                    sync_status='active',
+                    last_sync=datetime.utcnow()
+                ),
+            ]
+
+            for conn in demo_connections:
+                db.session.add(conn)
+
+            # Add knowledge library items
+            knowledge_items = [
+                KnowledgeItem(
+                    category='health',
+                    title='Sleep Importance',
+                    content='Get 7-9 hours of sleep nightly for optimal health.',
+                    tags=json.dumps(["sleep", "health"]),
+                    is_fallback=True
+                ),
+                KnowledgeItem(
+                    category='law',
+                    title='Philippine Rights',
+                    content='The Constitution guarantees freedom of speech and religion.',
+                    tags=json.dumps(["law", "rights"]),
+                    is_fallback=True
+                ),
+                KnowledgeItem(
+                    category='philosophy',
+                    title='Stoic Wisdom',
+                    content='Focus on what you can control, accept what you cannot.',
+                    tags=json.dumps(["philosophy", "stoicism"]),
+                    is_fallback=True
+                ),
+                KnowledgeItem(
+                    category='science',
+                    title='Critical Thinking',
+                    content='Always question sources and look for evidence.',
+                    tags=json.dumps(["science", "thinking"]),
+                    is_fallback=True
+                ),
+            ]
+
+            for item in knowledge_items:
+                db.session.add(item)
+
+            db.session.commit()
+            logger.info("Added demo data and knowledge library")
+
     # Initialize dashboard manager
     dashboard_manager = DashboardManager(app)
     dashboard_manager.start()
-    
+
     # Run Flask app
     try:
         logger.info("Starting Personal Dashboard on http://localhost:5000")
