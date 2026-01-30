@@ -8,21 +8,76 @@
 <style>
     .planner-container {
         display: grid;
-        grid-template-columns: 300px 1fr;
+        grid-template-columns: 300px 3fr;
         gap: var(--spacing-md);
         height: calc(100vh - 120px);
         max-width: 100%;
-        overflow: hidden;
+        overflow: auto;
     }
     
-    .planner-sidebar {
-        background: var(--card-bg);
-        border-radius: var(--radius-lg);
-        padding: var(--spacing-md);
-        overflow-y: auto;
-        overflow-x: hidden;
-        max-height: 100%;
-    }
+.planner-sidebar {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg);
+    padding: 20px 25px; /* Increased horizontal padding */
+    overflow-y: auto;
+    overflow-x: auto;
+    max-height: 100%;
+    width: 324px; /* Fixed width that's 15px wider than before */
+    min-width: 315px; /* Ensure it doesn't shrink below this */
+}
+
+/* Add line-height for better text spacing */
+.planner-sidebar h3,
+.planner-sidebar h4,
+.planner-sidebar p {
+    line-height: 1.6; /* Increased from typical 1.4-1.5 */
+}
+
+.planner-sidebar p {
+    margin-bottom: 12px; /* Add spacing between paragraphs */
+}
+
+.planner-sidebar .notification-item {
+    margin-bottom: 15px; /* More spacing between notification items */
+    padding: 15px; /* More internal padding */
+    line-height: 1.5;
+}
+
+.planner-sidebar .notification-item p.small {
+    margin-top: 8px; /* Space between title and content */
+    margin-bottom: 8px;
+}
+
+/* For form elements inside sidebar */
+.planner-sidebar input,
+.planner-sidebar textarea,
+.planner-sidebar select {
+    margin-bottom: 15px; /* More spacing between form fields */
+    padding: 10px 12px; /* More internal padding for form fields */
+}
+
+.planner-sidebar .task-form {
+    margin-top: 25px; /* More space above task form */
+    padding-top: 25px; /* More space inside task form */
+}
+
+.planner-sidebar .calendar-stats {
+    margin-top: 25px;
+}
+
+.planner-sidebar .stats-grid {
+    gap: 15px; /* More gap between stat cards */
+    margin-top: 20px;
+}
+
+.planner-sidebar .stat-card {
+    padding: 18px; /* More padding in stat cards */
+}
+
+/* If you want to increase spacing for ALL text in sidebar */
+.planner-sidebar * {
+    letter-spacing: 0.01em; /* Slight letter spacing for readability */
+}
     
     .calendar-container {
         background: var(--card-bg);
@@ -173,7 +228,7 @@
                         <option value="high">High</option>
                     </select>
                 </div>
-                <button type="submit" class="btn-primary">
+                <button type="submit" class="btn">
                     <i class="fas fa-plus"></i> Add to Calendar
                 </button>
             </form>

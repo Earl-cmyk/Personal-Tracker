@@ -1378,8 +1378,13 @@ def login_post():
                 
                 flash('Registration successful! Welcome to your dashboard.', 'success')
                 
-                # Create default demo apps for new user
-                create_demo_apps_for_user(new_user.id)
+                # In your registration form, add a checkbox:
+                # <input type="checkbox" name="create_demo" id="create_demo" checked>
+                # <label for="create_demo">Add sample apps to get started</label>
+
+                # Then in your route:
+                create_demo = 'create_demo' in request.form
+                create_demo_apps_for_user(new_user.id, create_demo=create_demo)
                 
                 return redirect(url_for('dashboard'))
                 
@@ -1396,14 +1401,17 @@ def login_post():
     # For GET requests, redirect to login page
     return redirect(url_for('login'))
 
-def create_demo_apps_for_user(user_id):
-    """Create demo app connections for new users"""
+def create_demo_apps_for_user(user_id, create_demo=True):
+    """Create demo app connections for new users - OPTIONAL"""
+    if not create_demo:
+        return
+    
     demo_apps = [
         {
             'name': 'GitHub Demo',
             'platform': 'github',
             'sync_status': 'active',
-            'profile_url': 'https://github.com/octocat'
+            'profile_url': 'https://github.com/Earl-cmyk'
         },
         {
             'name': 'YouTube Stats',
@@ -1432,37 +1440,10 @@ def create_demo_apps_for_user(user_id):
         db.session.add(app)
     
     db.session.commit()
+    logger.info(f"Created demo apps for user {user_id}")
     
-    # Create some demo metrics
-    app_connections = AppConnection.query.filter_by(user_id=user_id).all()
-    for app in app_connections:
-        if app.platform == 'github':
-            m1 = Metric(
-                connection_id=app.id,
-                metric_type='followers',
-                value=4500,
-                label='Followers',
-                timestamp=datetime.utcnow()
-            )
-            m2 = Metric(
-                connection_id=app.id,
-                metric_type='repositories',
-                value=23,
-                label='Repositories',
-                timestamp=datetime.utcnow()
-            )
-            db.session.add(m1)
-            db.session.add(m2)
-        elif app.platform == 'youtube':
-            m = Metric(
-                connection_id=app.id,
-                metric_type='subscribers',
-                value=12000,
-                label='Subscribers',
-                timestamp=datetime.utcnow()
-            )
-    db.session.add(m)
-    db.session.commit()
+    # OPTIONAL: Create demo metrics (comment this out for clean start)
+    # create_demo_metrics_for_user(user_id)
     
 @app.route('/api/ollama/test')
 @login_required
@@ -1919,7 +1900,101 @@ def init_knowledge_library():
             db.session.commit()
             logger.info("Initialized knowledge library with fallback content")
 
+@app.route('/api/add-sample-apps', methods=['POST'])
+@login_required
+def add_sample_apps():
+    """Manually add sample apps for exploration"""
+    sample_apps = [
+        {
+            'name': 'GitHub Sample',
+            'platform': 'github',
+            'profile_url': 'https://github.com/Earl-cmyk'
+        },
+        {
+            'name': 'YouTube Sample',
+            'platform': 'youtube',
+            'profile_url': 'https://www.youtube.com/@YouTube'
+        }
+    ]
+    
+    added_count = 0
+    for app_data in sample_apps:
+        # Check if already exists
+        existing = AppConnection.query.filter_by(
+            user_id=current_user.id,
+            app_name=app_data['name']
+        ).first()
+        
+        if not existing:
+            app = AppConnection(
+                user_id=current_user.id,
+                app_name=app_data['name'],
+                platform=app_data['platform'],
+                profile_url=app_data.get('profile_url'),
+                credentials='{}',
+                sync_status='active',
+                last_sync=datetime.utcnow()
+            )
+            db.session.add(app)
+            added_count += 1
+    
+    if added_count > 0:
+        db.session.commit()
+        return jsonify({
+            'status': 'success',
+            'message': f'Added {added_count} sample apps',
+            'count': added_count
+        })
+    else:
+        return jsonify({
+            'status': 'info',
+            'message': 'Sample apps already added'
+        })
 
+@app.route('/api/reset-my-apps', methods=['POST'])
+@login_required
+def reset_my_apps():
+    """Remove all apps and metrics for current user"""
+    if not request.json or not request.json.get('confirm'):
+        return jsonify({'error': 'Confirmation required'}), 400
+    
+    try:
+        # Delete all user's connections
+        connections = AppConnection.query.filter_by(user_id=current_user.id).all()
+        connection_ids = [c.id for c in connections]
+        
+        # Delete metrics for these connections
+        Metric.query.filter(Metric.connection_id.in_(connection_ids)).delete()
+        
+        # Delete connections
+        for conn in connections:
+            db.session.delete(conn)
+        
+        # Delete brain dumps
+        BrainDump.query.filter_by(user_id=current_user.id).delete()
+        
+        # Delete calendar events
+        CalendarEvent.query.filter_by(user_id=current_user.id).delete()
+        
+        db.session.commit()
+        
+        # Log activity
+        activity = Activity(
+            user_id=current_user.id,
+            action='reset_apps',
+            details='User reset all apps and data'
+        )
+        db.session.add(activity)
+        db.session.commit()
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'All apps and data removed. Start fresh!'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500  
 # ============================================================================
 # INITIALIZATION
 # ============================================================================
@@ -1944,7 +2019,7 @@ def init_db():
                 {
                     'app_name': 'GitHub',
                     'platform': 'github',
-                    'profile_url': 'https://github.com/octocat',
+                    'profile_url': 'https://github.com/Earl-cmyk',
                     'sync_status': 'active'
                 },
                 {
@@ -2080,7 +2155,7 @@ def initialize_application():
                 {
                     'app_name': 'GitHub',
                     'platform': 'github',
-                    'profile_url': 'https://github.com/octocat',
+                    'profile_url': 'https://github.com/Earl-cmyk',
                     'sync_status': 'active'
                 },
                 {
@@ -2135,94 +2210,90 @@ def initialize_application():
 
     logger.info("Application initialization complete")
 
+def init_knowledge_library_fallback():
+    """Initialize knowledge library with fallback content (no user required)"""
+    try:
+        with app.app_context():
+            # Check if knowledge library is empty
+            if KnowledgeItem.query.count() == 0:
+                knowledge_items = [
+                    KnowledgeItem(
+                        category='health',
+                        title='The Importance of Sleep',
+                        content='Adults need 7-9 hours of sleep per night for optimal health. Sleep helps with memory consolidation, immune function, and cellular repair.',
+                        tags=json.dumps(["sleep", "health", "wellness"]),
+                        is_fallback=True
+                    ),
+                    KnowledgeItem(
+                        category='law',
+                        title='Basic Rights in the Philippines',
+                        content='The 1987 Philippine Constitution guarantees rights including: freedom of speech, freedom of religion, right to due process, and protection against unreasonable searches.',
+                        tags=json.dumps(["law", "rights", "philippines"]),
+                        is_fallback=True
+                    ),
+                    KnowledgeItem(
+                        category='philosophy',
+                        title='Stoic Principles',
+                        content='Stoicism teaches: focus on what you can control, accept what you cannot, and cultivate virtue. As Marcus Aurelius said, "You have power over your mind - not outside events."',
+                        tags=json.dumps(["philosophy", "stoicism", "wisdom"]),
+                        is_fallback=True
+                    ),
+                    KnowledgeItem(
+                        category='science',
+                        title='Critical Thinking',
+                        content='The scientific method involves: observation, questioning, hypothesis formation, experimentation, analysis, and conclusion. Always question sources and look for evidence.',
+                        tags=json.dumps(["science", "thinking", "method"]),
+                        is_fallback=True
+                    ),
+                ]
+                
+                for item in knowledge_items:
+                    db.session.add(item)
+                
+                db.session.commit()
+                logger.info("Knowledge library initialized")
+                
+    except Exception as e:
+        logger.error(f"Failed to initialize knowledge library: {e}")
 
+def init_db():
+    """Initialize database with all tables - NO DEMO DATA"""
+    with app.app_context():
+        # Create all tables
+        db.create_all()
+        logger.info("Database tables created")
+        
+        # COMMENT OUT or REMOVE the demo user creation
+        # Users will register themselves
+        
+        # Optional: You can keep the knowledge library initialization
+        init_knowledge_library_fallback()
+        
 if __name__ == '__main__':
     # Create data directory
     DATA_DIR.mkdir(exist_ok=True)
-
-    # Initialize inside app context
+    
+    # Initialize with NO DEMO DATA
     with app.app_context():
-        # Create all tables FIRST
+        # Create all tables
         db.create_all()
         logger.info("Database tables created")
-
-        # Create demo user if none exists
-        if not User.query.first():
-            demo_user = User(email='demo@local.dev', google_id='demo_local')
-            demo_user.set_password('demo123')
-            db.session.add(demo_user)
-            db.session.commit()
-            logger.info("Created demo user")
-
-            # Add demo connections
-            demo_connections = [
-                AppConnection(
-                    user_id=demo_user.id,
-                    app_name='GitHub',
-                    platform='github',
-                    profile_url='https://github.com/octocat',
-                    sync_status='active',
-                    last_sync=datetime.utcnow()
-                ),
-                AppConnection(
-                    user_id=demo_user.id,
-                    app_name='YouTube',
-                    platform='youtube',
-                    profile_url='https://www.youtube.com/@YouTube',
-                    sync_status='active',
-                    last_sync=datetime.utcnow()
-                ),
-            ]
-
-            for conn in demo_connections:
-                db.session.add(conn)
-
-            # Add knowledge library items
-            knowledge_items = [
-                KnowledgeItem(
-                    category='health',
-                    title='Sleep Importance',
-                    content='Get 7-9 hours of sleep nightly for optimal health.',
-                    tags=json.dumps(["sleep", "health"]),
-                    is_fallback=True
-                ),
-                KnowledgeItem(
-                    category='law',
-                    title='Philippine Rights',
-                    content='The Constitution guarantees freedom of speech and religion.',
-                    tags=json.dumps(["law", "rights"]),
-                    is_fallback=True
-                ),
-                KnowledgeItem(
-                    category='philosophy',
-                    title='Stoic Wisdom',
-                    content='Focus on what you can control, accept what you cannot.',
-                    tags=json.dumps(["philosophy", "stoicism"]),
-                    is_fallback=True
-                ),
-                KnowledgeItem(
-                    category='science',
-                    title='Critical Thinking',
-                    content='Always question sources and look for evidence.',
-                    tags=json.dumps(["science", "thinking"]),
-                    is_fallback=True
-                ),
-            ]
-
-            for item in knowledge_items:
-                db.session.add(item)
-
-            db.session.commit()
-            logger.info("Added demo data and knowledge library")
-
+        
+        # Initialize knowledge library only (no user data)
+        try:
+            if KnowledgeItem.query.count() == 0:
+                init_knowledge_library_fallback()
+        except:
+            pass  # Skip if fails
+    
     # Initialize dashboard manager
     dashboard_manager = DashboardManager(app)
     dashboard_manager.start()
-
+    
     # Run Flask app
     try:
         logger.info("Starting Personal Dashboard on http://localhost:5000")
-        logger.info("Press Ctrl+C to stop")
+        logger.info("Users will start with a blank slate")
         app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
     except KeyboardInterrupt:
         logger.info("Shutting down...")

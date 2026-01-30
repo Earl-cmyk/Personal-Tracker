@@ -215,19 +215,15 @@
         <div class="nav-tabs">
             <a href="{{ url_for('dashboard') }}" class="nav-tab {% if request.endpoint == 'dashboard' %}active{% endif %}">
                 <i class="fas fa-chart-bar"></i>
-                <span>Dashboard</span>
+                <span></span>
             </a>
             <a href="{{ url_for('planner') }}" class="nav-tab {% if request.endpoint == 'planner' %}active{% endif %}">
                 <i class="fas fa-calendar-alt"></i>
-                <span>Planner</span>
+                <span></span>
             </a>
             <a href="{{ url_for('brain_dump') }}" class="nav-tab {% if request.endpoint == 'brain_dump' %}active{% endif %}">
                 <i class="fas fa-brain"></i>
-                <span>Brain Dump</span>
-            </a>
-            <a href="{{ url_for('knowledge_library') }}" class="nav-tab {% if request.endpoint == 'knowledge_library' %}active{% endif %}">
-                <i class="fas fa-book"></i>
-                <span>Knowledge Library</span>
+                <span></span>
             </a>
         </div>
         <div class="nav-controls">
@@ -272,6 +268,219 @@
     
     <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
     <script>
+    // Enhanced Scrollbar Management
+    document.addEventListener('DOMContentLoaded', function() {
+        // Apply custom scrollbar classes to scrollable elements
+        const scrollableElements = [
+            '.planner-sidebar',
+            '.analysis-sidebar',
+            '.notifications-list',
+            '.calendar-container',
+            '#dumpEditor',
+            '.draggable-list',
+            '.modal-content',
+            '.apps-grid',
+            '.insights-grid'
+        ];
+        
+        scrollableElements.forEach(selector => {
+            const elements = document.querySelectorAll(selector);
+            elements.forEach(el => {
+                el.classList.add('custom-scrollbar');
+                
+                // Add specific scrollbar classes based on element type
+                if (selector.includes('sidebar')) {
+                    el.classList.add('thin-scrollbar');
+                } else if (selector.includes('dumpEditor')) {
+                    el.classList.add('transparent-scrollbar');
+                } else if (selector.includes('calendar')) {
+                    el.classList.add('dark-scrollbar');
+                } else if (selector.includes('modal')) {
+                    el.classList.add('hide-scrollbar');
+                }
+            });
+        });
+        
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+        
+        // Auto-hide scrollbars on mobile
+        if (window.innerWidth <= 768) {
+            document.querySelectorAll('.custom-scrollbar').forEach(el => {
+                el.classList.add('mobile-scrollbar');
+            });
+        }
+        
+        // Scroll to top functionality
+        window.addEventListener('scroll', function() {
+            const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+            const scrollBtn = document.getElementById('scrollToTop');
+            
+            if (scrollTop > 300) {
+                if (!scrollBtn) {
+                    const btn = document.createElement('button');
+                    btn.id = 'scrollToTop';
+                    btn.className = 'btn-primary scroll-to-top';
+                    btn.innerHTML = '<i class="fas fa-arrow-up"></i>';
+                    btn.style.cssText = `
+                        position: fixed;
+                        bottom: 20px;
+                        right: 20px;
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        z-index: 1000;
+                        opacity: 0;
+                        transform: translateY(100px);
+                        transition: all 0.3s ease;
+                        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+                    `;
+                    document.body.appendChild(btn);
+                    
+                    btn.addEventListener('click', () => {
+                        window.scrollTo({
+                            top: 0,
+                            behavior: 'smooth'
+                        });
+                    });
+                }
+                
+                const btn = document.getElementById('scrollToTop');
+                btn.style.opacity = '1';
+                btn.style.transform = 'translateY(0)';
+            } else {
+                const btn = document.getElementById('scrollToTop');
+                if (btn) {
+                    btn.style.opacity = '0';
+                    btn.style.transform = 'translateY(100px)';
+                }
+            }
+        });
+        
+        // Scroll progress bar
+        const progressBar = document.createElement('div');
+        progressBar.className = 'scroll-progress';
+        document.body.appendChild(progressBar);
+        
+        window.addEventListener('scroll', function() {
+            const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+            const scrollHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+            const scrollPercent = (scrollTop / scrollHeight) * 100;
+            progressBar.style.width = scrollPercent + '%';
+        });
+        
+        // Enhanced scroll indicators
+        const scrollContainers = document.querySelectorAll('.planner-sidebar, .analysis-sidebar, .notifications-list');
+        scrollContainers.forEach(container => {
+            let isScrolling;
+            
+            container.addEventListener('scroll', function() {
+                container.classList.add('scrolling');
+                
+                clearTimeout(isScrolling);
+                isScrolling = setTimeout(() => {
+                    container.classList.remove('scrolling');
+                }, 100);
+                
+                // Add scroll shadows
+                if (this.scrollTop > 10) {
+                    this.classList.add('scrolled');
+                } else {
+                    this.classList.remove('scrolled');
+                }
+                
+                if (this.scrollTop + this.clientHeight >= this.scrollHeight - 10) {
+                    this.classList.add('scrolled-to-bottom');
+                } else {
+                    this.classList.remove('scrolled-to-bottom');
+                }
+            });
+            
+            // Add scroll indicators
+            if (container.scrollHeight > container.clientHeight) {
+                container.classList.add('has-scrollbar');
+                container.classList.add('scroll-shadow-top', 'scroll-shadow-bottom');
+            }
+            
+            // Add scroll to bottom button
+            const scrollToBottomBtn = document.createElement('button');
+            scrollToBottomBtn.className = 'scroll-to-bottom';
+            scrollToBottomBtn.innerHTML = '<i class="fas fa-arrow-down"></i>';
+            scrollToBottomBtn.title = 'Scroll to bottom';
+            container.style.position = 'relative';
+            container.appendChild(scrollToBottomBtn);
+            
+            scrollToBottomBtn.addEventListener('click', () => {
+                container.scrollTo({
+                    top: container.scrollHeight,
+                    behavior: 'smooth'
+                });
+            });
+            
+            // Show/hide scroll to bottom button
+            container.addEventListener('scroll', () => {
+                if (container.scrollTop < container.scrollHeight - container.clientHeight - 100) {
+                    scrollToBottomBtn.classList.add('show');
+                } else {
+                    scrollToBottomBtn.classList.remove('show');
+                }
+            });
+        });
+        
+        // Parallax scrolling effect disabled for insights
+        // const parallaxElements = document.querySelectorAll('.welcome-card, .insight-card');
+        // window.addEventListener('scroll', () => {
+        //     const scrolled = window.pageYOffset;
+        //     
+        //     parallaxElements.forEach((el, index) => {
+        //         const speed = 0.5 + (index * 0.1);
+        //         const yPos = -(scrolled * speed);
+        //         el.style.transform = `translateY(${yPos}px)`;
+        //     });
+        // });
+        
+        // Infinite scroll for notifications (if implemented)
+        const notificationList = document.querySelector('.notifications-list');
+        if (notificationList) {
+            let loading = false;
+            
+            notificationList.addEventListener('scroll', async function() {
+                if (this.scrollTop + this.clientHeight >= this.scrollHeight - 100 && !loading) {
+                    loading = true;
+                    // Add loading indicator
+                    const loader = document.createElement('div');
+                    loader.className = 'scroll-loader';
+                    loader.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                    loader.style.cssText = `
+                        text-align: center;
+                        padding: 20px;
+                        color: var(--text-secondary);
+                    `;
+                    this.appendChild(loader);
+                    
+                    // Simulate loading more notifications
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    loader.remove();
+                    loading = false;
+                }
+            });
+        }
+    });
+    
     // Theme Management
     document.addEventListener('DOMContentLoaded', function() {
         const themeToggle = document.getElementById('themeToggle');

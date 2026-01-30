@@ -346,7 +346,44 @@
         </form>
     </div>
 </div>
+<!-- Add this to your dashboard template -->
+<div class="welcome-card" style="display: {% if connections %}none{% else %}block{% endif %};">
+    <h3><i class="fas fa-rocket"></i> Welcome to Your Dashboard!</h3>
+    <p>Get started by adding your first app connection:</p>
+    <div class="welcome-actions">
+        <a href="{{ url_for('add_app') }}" class="btn-primary">
+            <i class="fas fa-plus"></i> Add Your First App
+        </a>
+        <button onclick="showQuickStartGuide()" class="btn-secondary">
+            <i class="fas fa-question-circle"></i> Quick Start Guide
+        </button>
+        <button onclick="addSampleApps()" class="btn-outline">
+            <i class="fas fa-vial"></i> Try Sample Apps
+        </button>
+    </div>
+</div>
 
+<script>
+function addSampleApps() {
+    if (confirm('Add sample GitHub and YouTube connections to explore features?')) {
+        fetch('/api/add-sample-apps', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            }
+        });
+    }
+}
+
+function showQuickStartGuide() {
+    // Show a modal with quick start instructions
+    alert('Quick Start:\n1. Click "Add Your First App"\n2. Choose a platform (e.g., GitHub, YouTube)\n3. Enter your profile URL\n4. Click "Add App"\n5. View your metrics on the dashboard!');
+}
+</script>
 <script>
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {

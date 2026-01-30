@@ -89,11 +89,14 @@
     .ai-thinking {
         display: none;
         text-align: center;
-        padding: 20px;
+        padding: var(--spacing-lg);
+        color: var(--text-secondary);
     }
-    
+
     .ai-thinking i {
         animation: spin 1s linear infinite;
+        font-size: 2rem;
+        margin-bottom: var(--spacing-sm);
     }
     
     @keyframes spin {
@@ -197,10 +200,10 @@
 The AI will analyze and help organize everything."></textarea>
         
         <div class="dump-toolbar">
-            <button class="btn-primary" onclick="analyzeDump()">
+            <button class="ai-thinking " onclick="analyzeDump()">
                 <i class="fas fa-robot"></i> Analyze with AI
             </button>
-            <button class="btn-secondary" onclick="saveDump()">
+            <button class="btn" onclick="saveDump()">
                 <i class="fas fa-save"></i> Save
             </button>
             <select id="analysisFocus">
